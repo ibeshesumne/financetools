@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # Constants
 risk_free_rate = 0.01  # Risk-free rate, assuming 1% annual rate
@@ -15,17 +16,15 @@ st.title('Stock Analysis Dashboard')
 with st.sidebar:
     st.header('User Inputs')
     # List all CSV files in the directory
-    csv_files = [f for f in os.listdir() if f.endswith('.csv')]
+    csv_files = ['Select a file...'] + [f for f in os.listdir() if f.endswith('.csv')]
     selected_file = st.selectbox("Choose a CSV file", csv_files)
-    start_date = st.date_input('Start Date', value=pd.to_datetime('2010-01-01'))
+    start_date = st.date_input('Start Date', value=pd.to_datetime('2023-01-01'))
     end_date = st.date_input('End Date', value=pd.to_datetime('2024-12-31'))
-    index = st.text_input('Benchmark Symbol', value='^DJI')  # User input for index
+    index = st.text_input('Benchmark Symbol', value='^HSI')  # User input for index
 
-
-if selected_file:
+if selected_file != 'Select a file...':
     stocks_df = pd.read_csv(selected_file)
     stocks = stocks_df['Symbol'].tolist()
-    # Rest of the code remains the same
 
     # Function to fetch data and calculate metrics
     def fetch_and_calculate(symbol, start_date, end_date):
@@ -72,5 +71,42 @@ if selected_file:
     # Display results
     st.header("Results Summary:")
     st.dataframe(results)
+
+# Plotting
+    # Extract the benchmark's CAGR and Annualized Volatility
+    benchmark_cagr = index_metrics['CAGR']
+    benchmark_stddev = index_metrics['Annualized Volatility']
+
+
+    # Use Streamlit columns to control the layout
+    col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
+
+    with col1:  # This block will use 3/4 of the width
+        # Initialize the plot with specified dimensions
+        fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
+
+
+        # Iterate over the DataFrame to plot each symbol
+        for i, row in results.iterrows():
+            ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
+            # Optionally, annotate the point with the symbol's name
+            ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
+
+        # Set plot title and labels
+        ax.set_title('Stock Returns vs. Standard Deviation')
+        ax.set_xlabel('Standard Deviation of Daily Returns (%)')
+        ax.set_ylabel('Compounded Annual Growth Rate (%)')
+
+        # Add legend to the plot
+        #ax.legend()
+
+        # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
+        ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
+        ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+
+        # Display the plot in the Streamlit app
+        st.pyplot(fig)
+
+
 else:
     st.write("Please upload a CSV file.")
