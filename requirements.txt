@@ -2,4 +2,4 @@ yfinance
 streamlit
 numpy
 pandas
-matplotlib.pyplot
+matplotlib
