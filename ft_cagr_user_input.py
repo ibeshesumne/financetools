@@ -20,7 +20,19 @@ with st.sidebar:
     stocks = [stock.strip() for stock in stocks_input.split(',')] if stocks_input else []
     start_date = st.date_input('Start Date', value=pd.to_datetime('2023-01-01'))
     end_date = st.date_input('End Date', value=pd.to_datetime('2024-12-31'))
-    index = st.text_input('Benchmark Symbol', value='^HSI')  # User input for index
+    
+    # User input for index
+    index_options = [
+        ('Hang Seng Index ^HSI', '^HSI'),
+        ('Dow Jones Industrial Average ^DJI', '^DJI'),
+        ('NASDAQ ^IXIC', '^IXIC'),
+        ('S&P 500 ^GSPC', '^GSPC'),
+        ('Nikkei ^N225', '^N225')
+    ]
+    index_name, index = st.selectbox('Select a Benchmark Symbol', index_options, format_func=lambda x: x[0])
+    custom_index = st.text_input('Or enter a custom Benchmark Symbol')
+    index = custom_index if custom_index else index
+    st.markdown("For more indices, please refer to [Yahoo Finance World Indices](https://finance.yahoo.com/world-indices/)")
 
 # Check if stocks list is not empty
 if not stocks:
