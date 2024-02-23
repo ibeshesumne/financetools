@@ -69,7 +69,7 @@ annual_returns_df['Outcome'] = np.where(annual_returns_df[f'{symbol_input} Annua
 st.header('Annual Returns and Outcome')
 st.dataframe(annual_returns_df)
 
-# Instructions for running: Save this script and run using the command: streamlit run financial_analysis_app.py
+# Instructions for running: Save this script and run using the command: streamlit run finance_tool_cagr_outcome_streamlit.py
 
 
 
