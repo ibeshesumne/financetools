@@ -77,6 +77,9 @@ def main():
     data_df = fetch_data(series)
     plot_data(data_df, series)
 
+    # Display the latest data points
+    st.dataframe(data_df.tail())
+
     # Display attribution and caution
     st.markdown("""
     **Attribution and caution:** 
