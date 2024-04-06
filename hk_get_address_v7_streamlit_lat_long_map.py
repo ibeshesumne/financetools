@@ -55,3 +55,6 @@ if st.button('Lookup'):
 
     # Display the map
     folium_static(m)
+
+# Add citation
+st.markdown("Data source: Hong Kong government.")
