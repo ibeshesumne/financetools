@@ -13,7 +13,7 @@ def get_latest_json_data(url):
 st.title('Next Train')
 
 # Load the data from the CSV file
-df = pd.read_csv(r'C:/Users/ml/Documents/workingR/nextmtr/data/processed/next_train_data_dictionary.csv', delimiter=';')
+df = pd.read_csv(r'next_train_data_dictionary.csv', delimiter=';')
 
 # Extract unique line names
 line_names = df['Line_name'].unique().tolist()
