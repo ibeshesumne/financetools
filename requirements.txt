@@ -5,3 +5,4 @@ pandas
 matplotlib
 requests
 xlrd
+streamlit-folium
