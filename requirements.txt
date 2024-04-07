@@ -6,4 +6,3 @@ matplotlib
 requests
 xlrd
 streamlit-folium
-st_cropper
