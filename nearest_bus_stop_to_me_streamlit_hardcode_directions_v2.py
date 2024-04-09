@@ -62,6 +62,9 @@ Instructions for iPhone
 4. Swipe up from bottom bar to see GPS coordinates                                  
 """)
 
+# With this:
+gps_input = st.text_input('Enter your GPS coordinates (e.g. 22.01657, 114.0126126)')
+
 #lat = st.number_input('Enter your latitude')
 #lon = st.number_input('Enter your longitude')
 
