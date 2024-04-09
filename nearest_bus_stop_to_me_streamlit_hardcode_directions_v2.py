@@ -62,8 +62,15 @@ Instructions for iPhone
 4. Swipe up from bottom bar to see GPS coordinates                                  
 """)
 
-lat = st.number_input('Enter your latitude')
-lon = st.number_input('Enter your longitude')
+#lat = st.number_input('Enter your latitude')
+#lon = st.number_input('Enter your longitude')
+
+# Parse the input to extract latitude and longitude
+try:
+    lat, lon = map(float, gps_input.split(','))
+except ValueError:
+    st.error('Please enter valid GPS coordinates in the format "latitude, longitude"')
+    st.stop()
 
 gps_file = 'merged_bus_stop_data_complete.csv'  # Hardcoded GPS file path
 
