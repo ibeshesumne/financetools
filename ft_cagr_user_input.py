@@ -86,34 +86,36 @@ else:
     st.dataframe(results)
 
 # Plotting
-# Extract the benchmark's CAGR and Annualized Volatility
-benchmark_cagr = index_metrics['CAGR']
-benchmark_stddev = index_metrics['Annualized Volatility']
+    # Extract the benchmark's CAGR and Annualized Volatility
+    benchmark_cagr = index_metrics['CAGR']
+    benchmark_stddev = index_metrics['Annualized Volatility']
 
-# Use Streamlit columns to control the layout
-col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
 
-with col1:  # This block will use 3/4 of the width
-    # Initialize the plot with specified dimensions
-    fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
+    # Use Streamlit columns to control the layout
+    col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
 
-    # Iterate over the DataFrame to plot each symbol
-    for i, row in results.iterrows():
-        ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
-        # Optionally, annotate the point with the symbol's name
-        ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
+    with col1:  # This block will use 3/4 of the width
+        # Initialize the plot with specified dimensions
+        fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
 
-    # Set plot title and labels
-    ax.set_title('Stock Returns vs. Standard Deviation')
-    ax.set_xlabel('Standard Deviation of Daily Returns (%)')
-    ax.set_ylabel('Compounded Annual Growth Rate (%)')
 
-    # Add legend to the plot
-    ax.legend()
+        # Iterate over the DataFrame to plot each symbol
+        for i, row in results.iterrows():
+            ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
+            # Optionally, annotate the point with the symbol's name
+            ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
 
-    # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
-    ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
-    ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+        # Set plot title and labels
+        ax.set_title('Stock Returns vs. Standard Deviation')
+        ax.set_xlabel('Standard Deviation of Daily Returns (%)')
+        ax.set_ylabel('Compounded Annual Growth Rate (%)')
 
-    # Display the plot in the Streamlit app
-    st.pyplot(fig)
+        # Add legend to the plot
+        #ax.legend()
+
+        # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
+        ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
+        ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+
+        # Display the plot in the Streamlit app
+        st.pyplot(fig)
