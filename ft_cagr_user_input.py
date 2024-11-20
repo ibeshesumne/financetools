@@ -85,11 +85,49 @@ else:
     st.header("Results Summary:")
     st.dataframe(results)
 
+    # Function to calculate annual returns
+    def calculate_annual_returns(data):
+        data['Year'] = data.index.year
+        data['Year'] = data['Year'].astype(str)  # Convert 'Year' to string
+        
+        # Debugging: Print the columns of the DataFrame before aggregation
+        print("Columns before aggregation:", data.columns)
+        
+        # Aggregate the data to get the first and last values of 'Adj Close' for each year
+        yearly_prices = data.groupby('Year')['Adj Close'].agg(['first', 'last'])
+        
+        # Debugging: Print the columns of the DataFrame after aggregation
+        print("Columns after aggregation:", yearly_prices.columns)
+        
+        # Check if 'first' and 'last' columns exist
+        if 'first' not in yearly_prices.columns or 'last' not in yearly_prices.columns:
+            raise KeyError("The aggregation did not produce the expected 'first' and 'last' columns.")
+        
+        # Calculate the annual returns
+        yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
+        
+        return yearly_returns.round(2)
+
+    # Fetching data
+    stock_data = yf.download(stocks[0], start=start_date, end=end_date)
+    benchmark_data = yf.download(index, start=start_date, end=end_date)
+
+    # Calculating and displaying annual returns
+    stock_annual_returns = calculate_annual_returns(stock_data)
+    benchmark_annual_returns = calculate_annual_returns(benchmark_data)
+
+    annual_returns_df = pd.DataFrame({
+        f'{stocks[0]} Annual Returns (%)': stock_annual_returns,
+        f'{index} Annual Returns (%)': benchmark_annual_returns
+    })
+
+    st.header("Annual Returns:")
+    st.dataframe(annual_returns_df)
+
 # Plotting
     # Extract the benchmark's CAGR and Annualized Volatility
     benchmark_cagr = index_metrics['CAGR']
     benchmark_stddev = index_metrics['Annualized Volatility']
-
 
     # Use Streamlit columns to control the layout
     col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
@@ -97,7 +135,6 @@ else:
     with col1:  # This block will use 3/4 of the width
         # Initialize the plot with specified dimensions
         fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
-
 
         # Iterate over the DataFrame to plot each symbol
         for i, row in results.iterrows():
