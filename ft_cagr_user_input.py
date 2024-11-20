@@ -101,7 +101,8 @@ else:
         
         # Check if 'first' and 'last' columns exist
         if 'first' not in yearly_prices.columns or 'last' not in yearly_prices.columns:
-            raise KeyError("The aggregation did not produce the expected 'first' and 'last' columns.")
+            st.error("The aggregation did not produce the expected 'first' and 'last' columns. Please check the data and try again.")
+            return pd.Series()  # Return an empty Series to avoid further errors
         
         # Calculate the annual returns
         yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
