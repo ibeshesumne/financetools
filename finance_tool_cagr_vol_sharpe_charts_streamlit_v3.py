@@ -103,11 +103,24 @@ def fetch_and_calculate(symbol, start_date, end_date):
         annualized_return = (1 + mean_daily_return) ** 252 - 1
         sharpe_ratio = (annualized_return - risk_free_rate) / volatility
 
+        # Ensure all values are scalars, not Series
+        cagr_value = ((adj_close_col.iloc[-1] / adj_close_col.iloc[0]) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100
+        volatility_value = volatility * 100
+        sharpe_value = sharpe_ratio
+        
+        # Convert to scalars if they are Series
+        if hasattr(cagr_value, 'iloc'):
+            cagr_value = float(cagr_value.iloc[0]) if len(cagr_value) > 0 else 0.0
+        if hasattr(volatility_value, 'iloc'):
+            volatility_value = float(volatility_value.iloc[0]) if len(volatility_value) > 0 else 0.0
+        if hasattr(sharpe_value, 'iloc'):
+            sharpe_value = float(sharpe_value.iloc[0]) if len(sharpe_value) > 0 else 0.0
+        
         metrics = {
-            'Symbol': symbol,
-            'CAGR': round(((adj_close_col.iloc[-1] / adj_close_col.iloc[0]) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100, 2),
-            'Annualized Volatility': round(volatility * 100, 2),
-            'Sharpe Ratio': round(sharpe_ratio, 2)
+            'Symbol': str(symbol),
+            'CAGR': round(float(cagr_value), 2),
+            'Annualized Volatility': round(float(volatility_value), 2),
+            'Sharpe Ratio': round(float(sharpe_value), 2)
         }
         return data, metrics
     except Exception as e:
@@ -130,15 +143,8 @@ def calculate_annual_returns(data):
         # Create a simple DataFrame with just the data we need
         # Ensure all arrays are 1-dimensional
         try:
-            # Debug: Check the shape and type of adj_close_col
-            st.write(f"Debug - adj_close_col type: {type(adj_close_col)}")
-            st.write(f"Debug - adj_close_col shape: {adj_close_col.shape if hasattr(adj_close_col, 'shape') else 'No shape'}")
-            st.write(f"Debug - adj_close_col values type: {type(adj_close_col.values)}")
-            
             # Ensure we have 1-dimensional arrays
             price_values = adj_close_col.values
-            st.write(f"Debug - price_values shape before flatten: {price_values.shape}")
-            st.write(f"Debug - price_values ndim: {price_values.ndim}")
             
             # Force flatten to 1D array
             if price_values.ndim > 1:
@@ -146,19 +152,14 @@ def calculate_annual_returns(data):
             elif hasattr(price_values, 'flatten'):
                 price_values = price_values.flatten()
             
-            st.write(f"Debug - price_values shape after flatten: {price_values.shape}")
-            
             simple_df = pd.DataFrame({
                 'Date': data.index,
                 'Price': price_values,
                 'Year': data.index.year
             })
             
-            st.write(f"Debug - simple_df shape: {simple_df.shape}")
-            st.write(f"Debug - simple_df columns: {list(simple_df.columns)}")
-            
         except Exception as debug_e:
-            st.error(f"Debug error in DataFrame creation: {str(debug_e)}")
+            st.error(f"Error in DataFrame creation: {str(debug_e)}")
             return pd.Series(dtype=float)
         
         # Validate the DataFrame
