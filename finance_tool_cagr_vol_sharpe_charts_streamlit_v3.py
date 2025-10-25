@@ -22,34 +22,91 @@ with st.sidebar:
     end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2024-12-31'))
 
 
+# Function to get adjusted close price column from yfinance data
+def get_adj_close_column(data):
+    """Extract adjusted close price column from yfinance data, handling different data structures."""
+    try:
+        # Check if data has MultiIndex columns
+        if isinstance(data.columns, pd.MultiIndex):
+            # For MultiIndex, try to get the first symbol's Adj Close
+            if 'Adj Close' in data.columns.levels[0]:
+                adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
+            else:
+                # If no Adj Close, use Close price
+                adj_close_col = data['Close'].iloc[:, 0] if len(data['Close'].columns) > 0 else data['Close']
+        else:
+            # For regular columns
+            if 'Adj Close' in data.columns:
+                adj_close_col = data['Adj Close']
+            elif 'Close' in data.columns:
+                adj_close_col = data['Close']
+            else:
+                # If neither exists, try to find any price column
+                price_cols = [col for col in data.columns if 'close' in col.lower() or 'price' in col.lower()]
+                if price_cols:
+                    adj_close_col = data[price_cols[0]]
+                else:
+                    raise ValueError(f"No suitable price column found. Available columns: {list(data.columns)}")
+        
+        return adj_close_col
+    except Exception as e:
+        st.error(f"Error extracting price data: {str(e)}")
+        return None
+
 # Function to fetch data and calculate metrics
 def fetch_and_calculate(symbol, start_date, end_date):
-    data = yf.download(symbol, start=start_date, end=end_date)
-    if data.empty:
-        st.write(f"No data for {symbol}, skipping.")
-        return None, None
-    daily_returns = data['Adj Close'].pct_change().dropna()
-    volatility = daily_returns.std() * np.sqrt(252)
-    mean_daily_return = daily_returns.mean()
-    annualized_return = (1 + mean_daily_return) ** 252 - 1
-    sharpe_ratio = (annualized_return - risk_free_rate) / volatility
+    try:
+        data = yf.download(symbol, start=start_date, end=end_date, auto_adjust=True)
+        if data.empty:
+            st.write(f"No data for {symbol}, skipping.")
+            return None, None
+        
+        # Get the price column using the helper function
+        adj_close_col = get_adj_close_column(data)
+        if adj_close_col is None:
+            st.error(f"Cannot extract price data for {symbol}")
+            return None, None
+        
+        daily_returns = adj_close_col.pct_change().dropna()
+        volatility = daily_returns.std() * np.sqrt(252)
+        mean_daily_return = daily_returns.mean()
+        annualized_return = (1 + mean_daily_return) ** 252 - 1
+        sharpe_ratio = (annualized_return - risk_free_rate) / volatility
 
-    metrics = {
-        'Symbol': symbol,
-        'CAGR': round(((data['Adj Close'].iloc[-1] / data['Adj Close'].iloc[0]) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100, 2),
-        'Annualized Volatility': round(volatility * 100, 2),
-        'Sharpe Ratio': round(sharpe_ratio, 2)
-    }
-    return data, metrics
+        metrics = {
+            'Symbol': symbol,
+            'CAGR': round(((adj_close_col.iloc[-1] / adj_close_col.iloc[0]) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100, 2),
+            'Annualized Volatility': round(volatility * 100, 2),
+            'Sharpe Ratio': round(sharpe_ratio, 2)
+        }
+        return data, metrics
+    except Exception as e:
+        st.error(f"Error processing {symbol}: {str(e)}")
+        return None, None
 
 
 # Function to calculate annual returns
 def calculate_annual_returns(data):
-    data['Year'] = data.index.year
-    data['Year'] = data['Year'].astype(str)  # Convert 'Year' to string type
-    yearly_prices = data.groupby('Year')['Adj Close'].agg(['first', 'last'])
-    yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
-    return yearly_returns.round(2)
+    try:
+        # Get the price column using the helper function
+        adj_close_col = get_adj_close_column(data)
+        if adj_close_col is None:
+            return pd.Series(dtype=float)
+        
+        # Create a simple DataFrame with just the data we need
+        simple_df = pd.DataFrame({
+            'Date': data.index,
+            'Price': adj_close_col.values,
+            'Year': data.index.year
+        })
+        
+        # Group by year and get first and last prices
+        yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
+        yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
+        return yearly_returns.round(2)
+    except Exception as e:
+        st.error(f"Error calculating annual returns: {str(e)}")
+        return pd.Series(dtype=float)
 
 
 # Fetch and process data for both the stock and the index
@@ -82,7 +139,7 @@ if stock_metrics and index_metrics:
         )
 
         st.header('Annual Returns and Outcome')
-        st.dataframe(annual_returns_df.style.applymap(lambda x: 'background-color : yellow' if x=='Outperform' else ''))  # Highlight 'Outperform' with yellow color)
+        st.dataframe(annual_returns_df.style.map(lambda x: 'background-color : yellow' if x=='Outperform' else ''))  # Highlight 'Outperform' with yellow color
 
     # Plotting
     # Extract the benchmark's CAGR and Annualized Volatility
