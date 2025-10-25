@@ -123,15 +123,47 @@ def calculate_annual_returns(data):
         if adj_close_col is None:
             return pd.Series(dtype=float)
         
+        # Ensure we have a proper pandas Series
+        if not isinstance(adj_close_col, pd.Series):
+            adj_close_col = pd.Series(adj_close_col, index=data.index)
+        
         # Create a simple DataFrame with just the data we need
-        simple_df = pd.DataFrame({
-            'Date': data.index,
-            'Price': adj_close_col.values,
-            'Year': data.index.year
-        })
+        # Ensure all arrays are 1-dimensional
+        try:
+            # Debug: Check the shape and type of adj_close_col
+            st.write(f"Debug - adj_close_col type: {type(adj_close_col)}")
+            st.write(f"Debug - adj_close_col shape: {adj_close_col.shape if hasattr(adj_close_col, 'shape') else 'No shape'}")
+            st.write(f"Debug - adj_close_col values type: {type(adj_close_col.values)}")
+            
+            # Ensure we have 1-dimensional arrays
+            price_values = adj_close_col.values
+            if hasattr(price_values, 'flatten'):
+                price_values = price_values.flatten()
+            
+            simple_df = pd.DataFrame({
+                'Date': data.index,
+                'Price': price_values,
+                'Year': data.index.year
+            })
+            
+            st.write(f"Debug - simple_df shape: {simple_df.shape}")
+            st.write(f"Debug - simple_df columns: {list(simple_df.columns)}")
+            
+        except Exception as debug_e:
+            st.error(f"Debug error in DataFrame creation: {str(debug_e)}")
+            return pd.Series(dtype=float)
+        
+        # Validate the DataFrame
+        if simple_df.empty or len(simple_df) < 2:
+            return pd.Series(dtype=float)
         
         # Group by year and get first and last prices
         yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
+        
+        # Check if we have valid data
+        if yearly_prices.empty:
+            return pd.Series(dtype=float)
+        
         yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
         return yearly_returns.round(2)
     except Exception as e:
