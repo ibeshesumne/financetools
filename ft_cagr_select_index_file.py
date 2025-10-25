@@ -92,9 +92,20 @@ if selected_file != 'Select a file...':
         try:
             # Suppress yfinance download messages
             import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                data = yf.download(symbol, start=start_date, end=end_date, auto_adjust=True, progress=False, show_errors=False)
+            import sys
+            from io import StringIO
+            
+            # Capture stdout to suppress progress messages
+            old_stdout = sys.stdout
+            sys.stdout = StringIO()
+            
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    data = yf.download(symbol, start=start_date, end=end_date, auto_adjust=True, progress=False)
+            finally:
+                # Restore stdout
+                sys.stdout = old_stdout
             
             if data.empty:  # Check if data is empty
                 st.write(f"No data for {symbol}, skipping.")
