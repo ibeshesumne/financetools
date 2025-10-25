@@ -137,8 +137,16 @@ def calculate_annual_returns(data):
             
             # Ensure we have 1-dimensional arrays
             price_values = adj_close_col.values
-            if hasattr(price_values, 'flatten'):
+            st.write(f"Debug - price_values shape before flatten: {price_values.shape}")
+            st.write(f"Debug - price_values ndim: {price_values.ndim}")
+            
+            # Force flatten to 1D array
+            if price_values.ndim > 1:
                 price_values = price_values.flatten()
+            elif hasattr(price_values, 'flatten'):
+                price_values = price_values.flatten()
+            
+            st.write(f"Debug - price_values shape after flatten: {price_values.shape}")
             
             simple_df = pd.DataFrame({
                 'Date': data.index,
