@@ -16,13 +16,8 @@ end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2024-12-31'))
 def get_adj_close_column(data):
     """Extract adjusted close price column from yfinance data, handling different data structures."""
     try:
-        # Debug: Show data structure
-        st.write(f"Data columns: {list(data.columns)}")
-        st.write(f"Data shape: {data.shape}")
-        
         # Check if data has MultiIndex columns
         if isinstance(data.columns, pd.MultiIndex):
-            st.write("MultiIndex columns detected")
             # For MultiIndex, try to get the first symbol's Adj Close
             if 'Adj Close' in data.columns.levels[0]:
                 adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
@@ -30,7 +25,6 @@ def get_adj_close_column(data):
                 # If no Adj Close, use Close price
                 adj_close_col = data['Close'].iloc[:, 0] if len(data['Close'].columns) > 0 else data['Close']
         else:
-            st.write("Regular columns detected")
             # For regular columns
             if 'Adj Close' in data.columns:
                 adj_close_col = data['Adj Close']
@@ -44,7 +38,6 @@ def get_adj_close_column(data):
                 else:
                     raise ValueError(f"No suitable price column found. Available columns: {list(data.columns)}")
         
-        st.write(f"Selected price column: {adj_close_col.name if hasattr(adj_close_col, 'name') else 'Unknown'}")
         return adj_close_col
     except Exception as e:
         st.error(f"Error extracting price data: {str(e)}")
@@ -136,16 +129,16 @@ def calculate_annual_returns(data):
         data_copy = data.copy()
         data_copy['Year'] = data_copy.index.year
         data_copy['Year'] = data_copy['Year'].astype(str)  # Convert 'Year' to string type
-        data_copy['Adj_Close'] = adj_close_col
+        data_copy['Price'] = adj_close_col  # Use generic 'Price' column name
         
         # Filter out invalid data
-        data_copy = data_copy.dropna(subset=['Adj_Close'])
-        data_copy = data_copy[data_copy['Adj_Close'] > 0]
+        data_copy = data_copy.dropna(subset=['Price'])
+        data_copy = data_copy[data_copy['Price'] > 0]
         
         if len(data_copy) < 2:
             return pd.Series(dtype=float)
         
-        yearly_prices = data_copy.groupby('Year')['Adj_Close'].agg(['first', 'last'])
+        yearly_prices = data_copy.groupby('Year')['Price'].agg(['first', 'last'])
         
         # Filter out years with insufficient data
         yearly_prices = yearly_prices.dropna()
