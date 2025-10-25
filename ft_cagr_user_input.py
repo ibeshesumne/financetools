@@ -147,128 +147,149 @@ else:
             st.error(f"Error processing {symbol}: {str(e)}")
             return None
 
-    # Fetch and process data
+    # Fetch and process data for benchmark first
     index_metrics = fetch_and_calculate(index, start_date, end_date)
-    stock_metrics = [metric for metric in (fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date) for stock in stocks) if metric is not None]
-
-    # Create DataFrame
-    results = pd.DataFrame([index_metrics] + stock_metrics)
-
-    # Ensure index is always at the top
-    results = pd.concat([results[results['Symbol'] == index], results[results['Symbol'] != index].sort_values(by='CAGR', ascending=False)])
-
-    # Display results
-    st.header("Results Summary:")
-    st.dataframe(results)
-
-    # Function to calculate annual returns
-    def calculate_annual_returns(data):
-        if data is None or data.empty:
-            return pd.Series(dtype=float)
-        
-        try:
-            # Use the helper function to get the price column
-            adj_close_col = get_adj_close_column(data)
-            if adj_close_col is None:
-                return pd.Series(dtype=float)
-            
-            # Validate data
-            if len(adj_close_col) < 2:
-                return pd.Series(dtype=float)
-            
-            # Create a simple DataFrame with just the data we need
-            # This avoids issues with MultiIndex DataFrames
-            simple_df = pd.DataFrame({
-                'Date': data.index,
-                'Price': adj_close_col.values,
-                'Year': data.index.year
-            })
-            
-            # Filter out invalid data
-            simple_df = simple_df.dropna(subset=['Price'])
-            simple_df = simple_df[simple_df['Price'] > 0]
-            
-            if len(simple_df) < 2:
-                return pd.Series(dtype=float)
-            
-            # Group by year and get first and last prices
-            yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
-            
-            # Filter out years with insufficient data
-            yearly_prices = yearly_prices.dropna()
-            
-            if len(yearly_prices) == 0:
-                return pd.Series(dtype=float)
-            
-            yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
-            return yearly_returns.round(2)
-        except Exception as e:
-            st.error(f"Error calculating annual returns: {str(e)}")
-            return pd.Series(dtype=float)
-
-    # Fetching data
-    try:
-        stock_data = yf.download(stocks[0], start=start_date, end=end_date)
-        benchmark_data = yf.download(index, start=start_date, end=end_date)
-
-        # Calculating and displaying annual returns
-        stock_annual_returns = calculate_annual_returns(stock_data)
-        benchmark_annual_returns = calculate_annual_returns(benchmark_data)
-
-        if not stock_annual_returns.empty and not benchmark_annual_returns.empty:
-            annual_returns_df = pd.DataFrame({
-                f'{stocks[0]} Annual Returns (%)': stock_annual_returns,
-                f'{index} Annual Returns (%)': benchmark_annual_returns
-            })
-
-            st.header("Annual Returns:")
-            st.dataframe(annual_returns_df)
-        else:
-            st.warning("Unable to calculate annual returns for one or both symbols.")
-    except Exception as e:
-        st.error(f"Error fetching data for annual returns: {str(e)}")
-
-    # Plotting
-    if index_metrics is not None and not results.empty:
-        try:
-            # Extract the benchmark's CAGR and Annualized Volatility as scalar values
-            benchmark_cagr = float(index_metrics['CAGR'])
-            benchmark_stddev = float(index_metrics['Annualized Volatility'])
-
-            # Use Streamlit columns to control the layout
-            col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
-
-            with col1:  # This block will use 3/4 of the width
-                # Initialize the plot with specified dimensions
-                fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
-
-                # Iterate over the DataFrame to plot each symbol
-                for i, row in results.iterrows():
-                    # Ensure we have scalar values for plotting
-                    volatility = float(row['Annualized Volatility'])
-                    cagr = float(row['CAGR'])
-                    symbol = str(row['Symbol'])
-                    
-                    ax.scatter(volatility, cagr, label=symbol)
-                    # Optionally, annotate the point with the symbol's name
-                    ax.text(volatility, cagr, symbol, color='black', ha='right', va='bottom')
-
-                # Set plot title and labels
-                ax.set_title('Stock Returns vs. Standard Deviation')
-                ax.set_xlabel('Standard Deviation of Daily Returns (%)')
-                ax.set_ylabel('Compounded Annual Growth Rate (%)')
-
-                # Add legend to the plot
-                #ax.legend()
-
-                # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
-                ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
-                ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
-
-                # Display the plot in the Streamlit app
-                st.pyplot(fig)
-        except Exception as e:
-            st.error(f"Error creating plot: {str(e)}")
+    
+    # Only proceed if benchmark data was successfully fetched
+    if index_metrics is None:
+        st.error(f"Failed to fetch benchmark data for {index}. Please check the symbol and try again.")
     else:
-        st.warning("Unable to create plot due to missing data.")
-        
+        # Fetch stock data using benchmark's first trading day
+        stock_metrics = [metric for metric in (fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date) for stock in stocks) if metric is not None]
+
+        # Create DataFrame
+        results = pd.DataFrame([index_metrics] + stock_metrics)
+
+        # Ensure index is always at the top
+        results = pd.concat([results[results['Symbol'] == index], results[results['Symbol'] != index].sort_values(by='CAGR', ascending=False)])
+
+        # Display results
+        st.header("Results Summary:")
+        st.dataframe(results)
+
+        # Function to calculate annual returns
+        def calculate_annual_returns(data):
+            if data is None or data.empty:
+                return pd.Series(dtype=float)
+            
+            try:
+                # Use the helper function to get the price column
+                adj_close_col = get_adj_close_column(data)
+                if adj_close_col is None:
+                    return pd.Series(dtype=float)
+                
+                # Ensure adj_close_col is a Series
+                if isinstance(adj_close_col, pd.DataFrame):
+                    adj_close_col = adj_close_col.iloc[:, 0]
+                
+                # Convert to Series if it's not already
+                if not isinstance(adj_close_col, pd.Series):
+                    adj_close_col = pd.Series(adj_close_col, index=data.index)
+                
+                # Validate data
+                if len(adj_close_col) < 2:
+                    return pd.Series(dtype=float)
+                
+                # Create a simple DataFrame with just the data we need
+                simple_df = pd.DataFrame({
+                    'Date': adj_close_col.index,
+                    'Price': adj_close_col.values.flatten(),  # Flatten to ensure 1D
+                    'Year': adj_close_col.index.year
+                })
+                
+                # Filter out invalid data
+                simple_df = simple_df.dropna(subset=['Price'])
+                simple_df = simple_df[simple_df['Price'] > 0]
+                
+                if len(simple_df) < 2:
+                    return pd.Series(dtype=float)
+                
+                # Group by year and get first and last prices
+                yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
+                
+                # Filter out years with insufficient data
+                yearly_prices = yearly_prices.dropna()
+                
+                if len(yearly_prices) == 0:
+                    return pd.Series(dtype=float)
+                
+                yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
+                return yearly_returns.round(2)
+            except Exception as e:
+                st.error(f"Error calculating annual returns: {str(e)}")
+                return pd.Series(dtype=float)
+
+        # Fetching data for annual returns
+        if stocks:
+            try:
+                stock_data = yf.download(stocks[0], start=start_date, end=end_date)
+                benchmark_data = yf.download(index, start=start_date, end=end_date)
+
+                # Calculating and displaying annual returns
+                stock_annual_returns = calculate_annual_returns(stock_data)
+                benchmark_annual_returns = calculate_annual_returns(benchmark_data)
+
+                if not stock_annual_returns.empty and not benchmark_annual_returns.empty:
+                    # Align the series by their common index
+                    common_index = stock_annual_returns.index.intersection(benchmark_annual_returns.index)
+                    if len(common_index) > 0:
+                        stock_aligned = stock_annual_returns.loc[common_index]
+                        benchmark_aligned = benchmark_annual_returns.loc[common_index]
+                        
+                        annual_returns_df = pd.DataFrame({
+                            f'{stocks[0]} Annual Returns (%)': stock_aligned,
+                            f'{index} Annual Returns (%)': benchmark_aligned
+                        })
+
+                        st.header("Annual Returns:")
+                        st.dataframe(annual_returns_df)
+                    else:
+                        st.warning("No common years found between stock and benchmark data.")
+                else:
+                    st.warning("Unable to calculate annual returns for one or both symbols.")
+            except Exception as e:
+                st.error(f"Error fetching data for annual returns: {str(e)}")
+
+        # Plotting
+        if not results.empty:
+            try:
+                # Extract the benchmark's CAGR and Annualized Volatility as scalar values
+                benchmark_cagr = float(index_metrics['CAGR'])
+                benchmark_stddev = float(index_metrics['Annualized Volatility'])
+
+                # Use Streamlit columns to control the layout
+                col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
+
+                with col1:  # This block will use 3/4 of the width
+                    # Initialize the plot with specified dimensions
+                    fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
+
+                    # Iterate over the DataFrame to plot each symbol
+                    for i, row in results.iterrows():
+                        # Ensure we have scalar values for plotting
+                        volatility = float(row['Annualized Volatility'])
+                        cagr = float(row['CAGR'])
+                        symbol = str(row['Symbol'])
+                        
+                        ax.scatter(volatility, cagr, label=symbol)
+                        # Optionally, annotate the point with the symbol's name
+                        ax.text(volatility, cagr, symbol, color='black', ha='right', va='bottom')
+
+                    # Set plot title and labels
+                    ax.set_title('Stock Returns vs. Standard Deviation')
+                    ax.set_xlabel('Standard Deviation of Daily Returns (%)')
+                    ax.set_ylabel('Compounded Annual Growth Rate (%)')
+
+                    # Add legend to the plot
+                    #ax.legend()
+
+                    # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
+                    ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
+                    ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+
+                    # Display the plot in the Streamlit app
+                    st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error creating plot: {str(e)}")
+        else:
+            st.warning("Unable to create plot due to missing data.")
