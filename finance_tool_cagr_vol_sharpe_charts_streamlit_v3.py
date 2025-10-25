@@ -98,23 +98,17 @@ def fetch_and_calculate(symbol, start_date, end_date):
             return None, None
         
         daily_returns = adj_close_col.pct_change().dropna()
-        volatility = daily_returns.std() * np.sqrt(252)
-        mean_daily_return = daily_returns.mean()
+        
+        # Ensure all calculations result in scalars
+        volatility = float(daily_returns.std()) * np.sqrt(252)
+        mean_daily_return = float(daily_returns.mean())
         annualized_return = (1 + mean_daily_return) ** 252 - 1
         sharpe_ratio = (annualized_return - risk_free_rate) / volatility
 
-        # Ensure all values are scalars, not Series
-        cagr_value = ((adj_close_col.iloc[-1] / adj_close_col.iloc[0]) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100
+        # Calculate CAGR as scalar
+        cagr_value = ((float(adj_close_col.iloc[-1]) / float(adj_close_col.iloc[0])) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100
         volatility_value = volatility * 100
         sharpe_value = sharpe_ratio
-        
-        # Convert to scalars if they are Series
-        if hasattr(cagr_value, 'iloc'):
-            cagr_value = float(cagr_value.iloc[0]) if len(cagr_value) > 0 else 0.0
-        if hasattr(volatility_value, 'iloc'):
-            volatility_value = float(volatility_value.iloc[0]) if len(volatility_value) > 0 else 0.0
-        if hasattr(sharpe_value, 'iloc'):
-            sharpe_value = float(sharpe_value.iloc[0]) if len(sharpe_value) > 0 else 0.0
         
         metrics = {
             'Symbol': str(symbol),
@@ -146,11 +140,17 @@ def calculate_annual_returns(data):
             # Ensure we have 1-dimensional arrays
             price_values = adj_close_col.values
             
-            # Force flatten to 1D array
-            if price_values.ndim > 1:
+            # Force flatten to 1D array - handle both numpy arrays and pandas Series
+            if hasattr(price_values, 'ndim') and price_values.ndim > 1:
                 price_values = price_values.flatten()
             elif hasattr(price_values, 'flatten'):
                 price_values = price_values.flatten()
+            elif hasattr(price_values, 'reshape'):
+                price_values = price_values.reshape(-1)
+            
+            # Ensure we have a proper 1D array
+            if len(price_values.shape) > 1:
+                price_values = price_values.ravel()
             
             simple_df = pd.DataFrame({
                 'Date': data.index,
