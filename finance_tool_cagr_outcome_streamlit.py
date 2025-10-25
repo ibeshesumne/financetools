@@ -168,6 +168,20 @@ if stock_data is not None and benchmark_data is not None:
     # Displaying metrics
     if stock_cagr is not None and benchmark_cagr is not None:
         st.header(f"{symbol_input} and {benchmark_input} metrics")
+        
+        # Get the actual date range from the data
+        stock_start_date = stock_data.index[0].strftime('%Y-%m-%d')
+        stock_end_date = stock_data.index[-1].strftime('%Y-%m-%d')
+        benchmark_start_date = benchmark_data.index[0].strftime('%Y-%m-%d')
+        benchmark_end_date = benchmark_data.index[-1].strftime('%Y-%m-%d')
+        
+        # Display date range information
+        st.write(f"**Date Range:** {stock_start_date} to {stock_end_date}")
+        
+        # Calculate number of years for context
+        years = (stock_data.index[-1] - stock_data.index[0]).days / 365.25
+        st.write(f"**Analysis Period:** {years:.1f} years")
+        
         metrics_df = pd.DataFrame({
             'Metric': ['CAGR (%)', 'Overall Gain (%)'],
             symbol_input: [stock_cagr, stock_gain],
