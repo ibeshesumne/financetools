@@ -12,6 +12,44 @@ benchmark_input = st.sidebar.text_input('Enter Benchmark Symbol', '^IXIC')
 start_date = st.sidebar.date_input('Start Date', value=pd.to_datetime('2010-01-01'))
 end_date = st.sidebar.date_input('End Date', value=pd.to_datetime('2024-12-31'))
 
+# Function to get adjusted close price column from yfinance data
+def get_adj_close_column(data):
+    """Extract adjusted close price column from yfinance data, handling different data structures."""
+    try:
+        # Debug: Show data structure
+        st.write(f"Data columns: {list(data.columns)}")
+        st.write(f"Data shape: {data.shape}")
+        
+        # Check if data has MultiIndex columns
+        if isinstance(data.columns, pd.MultiIndex):
+            st.write("MultiIndex columns detected")
+            # For MultiIndex, try to get the first symbol's Adj Close
+            if 'Adj Close' in data.columns.levels[0]:
+                adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
+            else:
+                # If no Adj Close, use Close price
+                adj_close_col = data['Close'].iloc[:, 0] if len(data['Close'].columns) > 0 else data['Close']
+        else:
+            st.write("Regular columns detected")
+            # For regular columns
+            if 'Adj Close' in data.columns:
+                adj_close_col = data['Adj Close']
+            elif 'Close' in data.columns:
+                adj_close_col = data['Close']
+            else:
+                # If neither exists, try to find any price column
+                price_cols = [col for col in data.columns if 'close' in col.lower() or 'price' in col.lower()]
+                if price_cols:
+                    adj_close_col = data[price_cols[0]]
+                else:
+                    raise ValueError(f"No suitable price column found. Available columns: {list(data.columns)}")
+        
+        st.write(f"Selected price column: {adj_close_col.name if hasattr(adj_close_col, 'name') else 'Unknown'}")
+        return adj_close_col
+    except Exception as e:
+        st.error(f"Error extracting price data: {str(e)}")
+        return None
+
 # Function to fetch data
 def fetch_data(symbol, start_date, end_date):
     try:
@@ -19,7 +57,7 @@ def fetch_data(symbol, start_date, end_date):
             st.error("Symbol cannot be empty")
             return None
             
-        data = yf.download(symbol.strip(), start=start_date, end=end_date)
+        data = yf.download(symbol.strip(), start=start_date, end=end_date, auto_adjust=True)
         if data.empty:
             st.error(f"No data found for symbol: {symbol}")
             return None
@@ -27,6 +65,12 @@ def fetch_data(symbol, start_date, end_date):
         # Validate that we have enough data points
         if len(data) < 2:
             st.error(f"Insufficient data for symbol: {symbol}")
+            return None
+        
+        # Test if we can extract price data
+        test_price = get_adj_close_column(data)
+        if test_price is None:
+            st.error(f"Cannot extract price data for symbol: {symbol}")
             return None
             
         return data
@@ -40,12 +84,11 @@ def calculate_metrics(data):
         return None, None
     
     try:
-        # Handle MultiIndex columns from yfinance
-        if isinstance(data.columns, pd.MultiIndex):
-            # Get the first (and likely only) symbol's data
-            adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
-        else:
-            adj_close_col = data['Adj Close']
+        # Use the helper function to get the price column
+        adj_close_col = get_adj_close_column(data)
+        if adj_close_col is None:
+            st.error("Cannot extract price data for calculation")
+            return None, None
         
         # Validate data
         if len(adj_close_col) < 2:
@@ -80,12 +123,10 @@ def calculate_annual_returns(data):
         return pd.Series(dtype=float)
     
     try:
-        # Handle MultiIndex columns from yfinance
-        if isinstance(data.columns, pd.MultiIndex):
-            # Get the first (and likely only) symbol's data
-            adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
-        else:
-            adj_close_col = data['Adj Close']
+        # Use the helper function to get the price column
+        adj_close_col = get_adj_close_column(data)
+        if adj_close_col is None:
+            return pd.Series(dtype=float)
         
         # Validate data
         if len(adj_close_col) < 2:
