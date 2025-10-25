@@ -125,20 +125,23 @@ def calculate_annual_returns(data):
         if len(adj_close_col) < 2:
             return pd.Series(dtype=float)
         
-        # Create a copy to avoid modifying original data
-        data_copy = data.copy()
-        data_copy['Year'] = data_copy.index.year
-        data_copy['Year'] = data_copy['Year'].astype(str)  # Convert 'Year' to string type
-        data_copy['Price'] = adj_close_col  # Use generic 'Price' column name
+        # Create a simple DataFrame with just the data we need
+        # This avoids issues with MultiIndex DataFrames
+        simple_df = pd.DataFrame({
+            'Date': data.index,
+            'Price': adj_close_col.values,
+            'Year': data.index.year
+        })
         
         # Filter out invalid data
-        data_copy = data_copy.dropna(subset=['Price'])
-        data_copy = data_copy[data_copy['Price'] > 0]
+        simple_df = simple_df.dropna(subset=['Price'])
+        simple_df = simple_df[simple_df['Price'] > 0]
         
-        if len(data_copy) < 2:
+        if len(simple_df) < 2:
             return pd.Series(dtype=float)
         
-        yearly_prices = data_copy.groupby('Year')['Price'].agg(['first', 'last'])
+        # Group by year and get first and last prices
+        yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
         
         # Filter out years with insufficient data
         yearly_prices = yearly_prices.dropna()
