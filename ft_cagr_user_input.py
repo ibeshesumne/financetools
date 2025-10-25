@@ -41,35 +41,47 @@ else:
 
     # Function to fetch data and calculate metrics
     def fetch_and_calculate(symbol, start_date, end_date):
-        data = yf.download(symbol, start=start_date, end=end_date)
-        if data.empty:  # Check if data is empty
-            st.write(f"No data for {symbol}, skipping.")
+        try:
+            data = yf.download(symbol, start=start_date, end=end_date)
+            if data.empty:  # Check if data is empty
+                st.write(f"No data for {symbol}, skipping.")
+                return None
+            
+            # Handle MultiIndex columns from yfinance
+            if isinstance(data.columns, pd.MultiIndex):
+                # Get the first (and likely only) symbol's data
+                adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
+            else:
+                adj_close_col = data['Adj Close']
+            
+            daily_returns = adj_close_col.pct_change().dropna()  # Calculate daily returns
+            volatility = daily_returns.std() * np.sqrt(252)  # Annualized volatility
+            mean_daily_return = daily_returns.mean()
+            annualized_return = (1 + mean_daily_return) ** 252 - 1
+            sharpe_ratio = (annualized_return - risk_free_rate) / volatility  # Calculate Sharpe Ratio
+
+            first_day = data.index[0]
+            last_day = data.index[-1]
+            first_price = adj_close_col.iloc[0]
+            last_price = adj_close_col.iloc[-1]
+            days = (last_day - first_day).days
+            cagr = ((last_price / first_price) ** (365.25 / days) - 1) * 100
+
+            return {
+                'Symbol': symbol,
+                'First Trading Day': first_day.date(),
+                'First Trading Price': round(first_price, 2),
+                'Last Trading Day': last_day.date(),
+                'Last Trading Price': round(last_price, 2),
+                'Number of Days': days,
+                'CAGR': round(cagr, 2),
+                'Overall Gain': round((last_price - first_price) / first_price * 100, 2),
+                'Annualized Volatility': round(volatility * 100, 2),
+                'Sharpe Ratio': round(sharpe_ratio, 2)
+            }
+        except Exception as e:
+            st.error(f"Error processing {symbol}: {str(e)}")
             return None
-        daily_returns = data['Adj Close'].pct_change().dropna()  # Calculate daily returns
-        volatility = daily_returns.std() * np.sqrt(252)  # Annualized volatility
-        mean_daily_return = daily_returns.mean()
-        annualized_return = (1 + mean_daily_return) ** 252 - 1
-        sharpe_ratio = (annualized_return - risk_free_rate) / volatility  # Calculate Sharpe Ratio
-
-        first_day = data.index[0]
-        last_day = data.index[-1]
-        first_price = data['Adj Close'].iloc[0]
-        last_price = data['Adj Close'].iloc[-1]
-        days = (last_day - first_day).days
-        cagr = ((last_price / first_price) ** (365.25 / days) - 1) * 100
-
-        return {
-            'Symbol': symbol,
-            'First Trading Day': first_day.date(),
-            'First Trading Price': round(first_price, 2),
-            'Last Trading Day': last_day.date(),
-            'Last Trading Price': round(last_price, 2),
-            'Number of Days': days,
-            'CAGR': round(cagr, 2),
-            'Overall Gain': round((last_price - first_price) / first_price * 100, 2),
-            'Annualized Volatility': round(volatility * 100, 2),
-            'Sharpe Ratio': round(sharpe_ratio, 2)
-        }
 
     # Fetch and process data
     index_metrics = fetch_and_calculate(index, start_date, end_date)
@@ -87,73 +99,92 @@ else:
 
     # Function to calculate annual returns
     def calculate_annual_returns(data):
-        data['Year'] = data.index.year
-        data['Year'] = data['Year'].astype(str)  # Convert 'Year' to string
+        if data is None or data.empty:
+            return pd.Series(dtype=float)
         
-        # Debugging: Print the columns of the DataFrame before aggregation
-        print("Columns before aggregation:", data.columns)
-        
-        # Aggregate the data to get the first and last values of 'Adj Close' for each year
-        yearly_prices = data.groupby('Year')['Adj Close'].agg(['first', 'last'])
-        
-        # Debugging: Print the columns of the DataFrame after aggregation
-        print("Columns after aggregation:", yearly_prices.columns)
-        
-        # Check if 'first' and 'last' columns exist
-        if 'first' not in yearly_prices.columns or 'last' not in yearly_prices.columns:
-            st.error("The aggregation did not produce the expected 'first' and 'last' columns. Please check the data and try again.")
-            return pd.Series()  # Return an empty Series to avoid further errors
-        
-        # Calculate the annual returns
-        yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
-        
-        return yearly_returns.round(2)
+        try:
+            # Handle MultiIndex columns from yfinance
+            if isinstance(data.columns, pd.MultiIndex):
+                # Get the first (and likely only) symbol's data
+                adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
+            else:
+                adj_close_col = data['Adj Close']
+            
+            # Create a copy to avoid modifying original data
+            data_copy = data.copy()
+            data_copy['Year'] = data_copy.index.year
+            data_copy['Year'] = data_copy['Year'].astype(str)  # Convert 'Year' to string
+            data_copy['Adj_Close'] = adj_close_col
+            
+            # Aggregate the data to get the first and last values of 'Adj Close' for each year
+            yearly_prices = data_copy.groupby('Year')['Adj_Close'].agg(['first', 'last'])
+            
+            # Calculate the annual returns
+            yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
+            
+            return yearly_returns.round(2)
+        except Exception as e:
+            st.error(f"Error calculating annual returns: {str(e)}")
+            return pd.Series(dtype=float)
 
     # Fetching data
-    stock_data = yf.download(stocks[0], start=start_date, end=end_date)
-    benchmark_data = yf.download(index, start=start_date, end=end_date)
+    try:
+        stock_data = yf.download(stocks[0], start=start_date, end=end_date)
+        benchmark_data = yf.download(index, start=start_date, end=end_date)
 
-    # Calculating and displaying annual returns
-    stock_annual_returns = calculate_annual_returns(stock_data)
-    benchmark_annual_returns = calculate_annual_returns(benchmark_data)
+        # Calculating and displaying annual returns
+        stock_annual_returns = calculate_annual_returns(stock_data)
+        benchmark_annual_returns = calculate_annual_returns(benchmark_data)
 
-    annual_returns_df = pd.DataFrame({
-        f'{stocks[0]} Annual Returns (%)': stock_annual_returns,
-        f'{index} Annual Returns (%)': benchmark_annual_returns
-    })
+        if not stock_annual_returns.empty and not benchmark_annual_returns.empty:
+            annual_returns_df = pd.DataFrame({
+                f'{stocks[0]} Annual Returns (%)': stock_annual_returns,
+                f'{index} Annual Returns (%)': benchmark_annual_returns
+            })
 
-    st.header("Annual Returns:")
-    st.dataframe(annual_returns_df)
+            st.header("Annual Returns:")
+            st.dataframe(annual_returns_df)
+        else:
+            st.warning("Unable to calculate annual returns for one or both symbols.")
+    except Exception as e:
+        st.error(f"Error fetching data for annual returns: {str(e)}")
 
-# Plotting
-    # Extract the benchmark's CAGR and Annualized Volatility
-    benchmark_cagr = index_metrics['CAGR']
-    benchmark_stddev = index_metrics['Annualized Volatility']
+    # Plotting
+    if index_metrics is not None and not results.empty:
+        try:
+            # Extract the benchmark's CAGR and Annualized Volatility
+            benchmark_cagr = index_metrics['CAGR']
+            benchmark_stddev = index_metrics['Annualized Volatility']
 
-    # Use Streamlit columns to control the layout
-    col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
+            # Use Streamlit columns to control the layout
+            col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
 
-    with col1:  # This block will use 3/4 of the width
-        # Initialize the plot with specified dimensions
-        fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
+            with col1:  # This block will use 3/4 of the width
+                # Initialize the plot with specified dimensions
+                fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
 
-        # Iterate over the DataFrame to plot each symbol
-        for i, row in results.iterrows():
-            ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
-            # Optionally, annotate the point with the symbol's name
-            ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
+                # Iterate over the DataFrame to plot each symbol
+                for i, row in results.iterrows():
+                    ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
+                    # Optionally, annotate the point with the symbol's name
+                    ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
 
-        # Set plot title and labels
-        ax.set_title('Stock Returns vs. Standard Deviation')
-        ax.set_xlabel('Standard Deviation of Daily Returns (%)')
-        ax.set_ylabel('Compounded Annual Growth Rate (%)')
+                # Set plot title and labels
+                ax.set_title('Stock Returns vs. Standard Deviation')
+                ax.set_xlabel('Standard Deviation of Daily Returns (%)')
+                ax.set_ylabel('Compounded Annual Growth Rate (%)')
 
-        # Add legend to the plot
-        #ax.legend()
+                # Add legend to the plot
+                #ax.legend()
 
-        # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
-        ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
-        ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+                # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
+                ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
+                ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
 
-        # Display the plot in the Streamlit app
-        st.pyplot(fig)
+                # Display the plot in the Streamlit app
+                st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Error creating plot: {str(e)}")
+    else:
+        st.warning("Unable to create plot due to missing data.")
+        
