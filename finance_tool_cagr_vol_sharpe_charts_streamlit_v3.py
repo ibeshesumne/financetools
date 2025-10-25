@@ -130,16 +130,23 @@ def calculate_annual_returns(data):
         if adj_close_col is None:
             return pd.Series(dtype=float)
         
+        # Ensure adj_close_col is a Series (flatten if needed)
+        if isinstance(adj_close_col, pd.DataFrame):
+            adj_close_col = adj_close_col.iloc[:, 0]
+        
+        # Convert to Series if it's not already
+        if not isinstance(adj_close_col, pd.Series):
+            adj_close_col = pd.Series(adj_close_col, index=data.index)
+        
         # Validate data
         if len(adj_close_col) < 2:
             return pd.Series(dtype=float)
         
         # Create a simple DataFrame with just the data we need
-        # This avoids issues with MultiIndex DataFrames
         simple_df = pd.DataFrame({
-            'Date': data.index,
-            'Price': adj_close_col.values,
-            'Year': data.index.year
+            'Date': adj_close_col.index,
+            'Price': adj_close_col.values.flatten(),  # Flatten to ensure 1D
+            'Year': adj_close_col.index.year
         })
         
         # Filter out invalid data
