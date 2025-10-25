@@ -156,10 +156,24 @@ if stock_metrics and index_metrics:
         index_annual_returns = calculate_annual_returns(index_data)
 
         # Combining the annual returns into one DataFrame for comparison
-        annual_returns_df = pd.DataFrame({
-            f'{stock_symbol} Annual Returns (%)': stock_annual_returns,
-            f'{index} Annual Returns (%)': index_annual_returns
-        })
+        # Ensure both series are properly aligned and have the same index
+        if not stock_annual_returns.empty and not index_annual_returns.empty:
+            # Align the series by their common index
+            common_index = stock_annual_returns.index.intersection(index_annual_returns.index)
+            if len(common_index) > 0:
+                stock_aligned = stock_annual_returns.loc[common_index]
+                index_aligned = index_annual_returns.loc[common_index]
+                
+                annual_returns_df = pd.DataFrame({
+                    f'{stock_symbol} Annual Returns (%)': stock_aligned,
+                    f'{index} Annual Returns (%)': index_aligned
+                })
+            else:
+                st.warning("No common years found between stock and benchmark data")
+                return
+        else:
+            st.warning("Unable to calculate annual returns for one or both symbols")
+            return
 
         # Determine outcome
         annual_returns_df['Outcome'] = np.where(
@@ -172,9 +186,9 @@ if stock_metrics and index_metrics:
         st.dataframe(annual_returns_df.style.map(lambda x: 'background-color : yellow' if x=='Outperform' else ''))  # Highlight 'Outperform' with yellow color
 
     # Plotting
-    # Extract the benchmark's CAGR and Annualized Volatility
-    benchmark_cagr = index_metrics['CAGR']
-    benchmark_stddev = index_metrics['Annualized Volatility']
+    # Extract the benchmark's CAGR and Annualized Volatility as scalar values
+    benchmark_cagr = float(index_metrics['CAGR'])
+    benchmark_stddev = float(index_metrics['Annualized Volatility'])
 
 
     # Use Streamlit columns to control the layout
@@ -187,9 +201,14 @@ if stock_metrics and index_metrics:
 
         # Iterate over the DataFrame to plot each symbol
         for i, row in results.iterrows():
-            ax.scatter(row['Annualized Volatility'], row['CAGR'], label=row['Symbol'])
+            # Ensure we have scalar values for plotting
+            volatility = float(row['Annualized Volatility'])
+            cagr = float(row['CAGR'])
+            symbol = str(row['Symbol'])
+            
+            ax.scatter(volatility, cagr, label=symbol)
             # Optionally, annotate the point with the symbol's name
-            ax.text(row['Annualized Volatility'], row['CAGR'], row['Symbol'], color='black', ha='right', va='bottom')
+            ax.text(volatility, cagr, symbol, color='black', ha='right', va='bottom')
 
         # Set plot title and labels
         ax.set_title('Stock Returns vs. Standard Deviation')
