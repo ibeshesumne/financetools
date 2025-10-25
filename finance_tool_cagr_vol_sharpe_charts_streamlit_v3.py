@@ -168,22 +168,20 @@ if stock_metrics and index_metrics:
                     f'{stock_symbol} Annual Returns (%)': stock_aligned,
                     f'{index} Annual Returns (%)': index_aligned
                 })
+                
+                # Determine outcome
+                annual_returns_df['Outcome'] = np.where(
+                    annual_returns_df[f'{stock_symbol} Annual Returns (%)'] > annual_returns_df[f'{index} Annual Returns (%)'],
+                    'Outperform',
+                    'Underperform'
+                )
+
+                st.header('Annual Returns and Outcome')
+                st.dataframe(annual_returns_df.style.map(lambda x: 'background-color : yellow' if x=='Outperform' else ''))  # Highlight 'Outperform' with yellow color
             else:
                 st.warning("No common years found between stock and benchmark data")
-                return
         else:
             st.warning("Unable to calculate annual returns for one or both symbols")
-            return
-
-        # Determine outcome
-        annual_returns_df['Outcome'] = np.where(
-            annual_returns_df[f'{stock_symbol} Annual Returns (%)'] > annual_returns_df[f'{index} Annual Returns (%)'],
-            'Outperform',
-            'Underperform'
-        )
-
-        st.header('Annual Returns and Outcome')
-        st.dataframe(annual_returns_df.style.map(lambda x: 'background-color : yellow' if x=='Outperform' else ''))  # Highlight 'Outperform' with yellow color
 
     # Plotting
     # Extract the benchmark's CAGR and Annualized Volatility as scalar values
