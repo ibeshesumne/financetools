@@ -135,32 +135,16 @@ def calculate_annual_returns(data):
             adj_close_col = pd.Series(adj_close_col, index=data.index)
         
         # Create a simple DataFrame with just the data we need
-        # Ensure all arrays are 1-dimensional
-        try:
-            # Ensure we have 1-dimensional arrays
-            price_values = adj_close_col.values
-            
-            # Force flatten to 1D array - handle both numpy arrays and pandas Series
-            if hasattr(price_values, 'ndim') and price_values.ndim > 1:
-                price_values = price_values.flatten()
-            elif hasattr(price_values, 'flatten'):
-                price_values = price_values.flatten()
-            elif hasattr(price_values, 'reshape'):
-                price_values = price_values.reshape(-1)
-            
-            # Ensure we have a proper 1D array
-            if len(price_values.shape) > 1:
-                price_values = price_values.ravel()
-            
-            simple_df = pd.DataFrame({
-                'Date': data.index,
-                'Price': price_values,
-                'Year': data.index.year
-            })
-            
-        except Exception as debug_e:
-            st.error(f"Error in DataFrame creation: {str(debug_e)}")
-            return pd.Series(dtype=float)
+        # This avoids issues with MultiIndex DataFrames
+        simple_df = pd.DataFrame({
+            'Date': data.index,
+            'Price': adj_close_col.values,
+            'Year': data.index.year
+        })
+        
+        # Filter out invalid data
+        simple_df = simple_df.dropna(subset=['Price'])
+        simple_df = simple_df[simple_df['Price'] > 0]
         
         # Validate the DataFrame
         if simple_df.empty or len(simple_df) < 2:
