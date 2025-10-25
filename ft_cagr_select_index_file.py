@@ -90,7 +90,12 @@ if selected_file != 'Select a file...':
     # Function to fetch data and calculate metrics
     def fetch_and_calculate(symbol, start_date, end_date):
         try:
-            data = yf.download(symbol, start=start_date, end=end_date, auto_adjust=True)
+            # Suppress yfinance download messages
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                data = yf.download(symbol, start=start_date, end=end_date, auto_adjust=True, progress=False, show_errors=False)
+            
             if data.empty:  # Check if data is empty
                 st.write(f"No data for {symbol}, skipping.")
                 return None
@@ -98,12 +103,17 @@ if selected_file != 'Select a file...':
             # Get the price column using the helper function
             adj_close_col = get_adj_close_column(data)
             if adj_close_col is None:
-                st.error(f"Cannot extract price data for {symbol}")
+                st.write(f"Cannot extract price data for {symbol}, skipping.")
                 return None
             
             # Ensure adj_close_col is a Series
             if isinstance(adj_close_col, pd.DataFrame):
                 adj_close_col = adj_close_col.iloc[:, 0]
+            
+            # Validate we have enough data
+            if len(adj_close_col) < 2:
+                st.write(f"Insufficient data for {symbol}, skipping.")
+                return None
             
             daily_returns = adj_close_col.pct_change().dropna()  # Calculate daily returns
             volatility = float(daily_returns.std()) * np.sqrt(252)  # Annualized volatility
@@ -131,14 +141,43 @@ if selected_file != 'Select a file...':
                 'Sharpe Ratio': round(sharpe_ratio, 2)
             }
         except Exception as e:
-            st.error(f"Error processing {symbol}: {str(e)}")
+            # Only show error for unexpected issues, not for common download failures
+            if "YFTzMissingError" in str(e) or "delisted" in str(e).lower() or "timezone" in str(e).lower():
+                st.write(f"Symbol {symbol} may be delisted or unavailable, skipping.")
+            else:
+                st.write(f"Error processing {symbol}: {str(e)}")
             return None
 
     # Fetch and process data
+    st.write(f"Processing {len(stocks)} stocks...")
+    
+    # Create progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
     index_metrics = fetch_and_calculate(index, start_date, end_date)
     
     if index_metrics is not None:
-        stock_metrics = [metric for metric in (fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date) for stock in stocks) if metric is not None]
+        stock_metrics = []
+        failed_symbols = []
+        
+        for i, stock in enumerate(stocks):
+            status_text.text(f"Processing {stock} ({i+1}/{len(stocks)})")
+            progress_bar.progress((i + 1) / len(stocks))
+            
+            metric = fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date)
+            if metric is not None:
+                stock_metrics.append(metric)
+            else:
+                failed_symbols.append(stock)
+        
+        # Show summary of failed downloads
+        if failed_symbols:
+            st.write(f"Note: {len(failed_symbols)} symbols could not be processed (possibly delisted or unavailable): {', '.join(failed_symbols[:10])}{'...' if len(failed_symbols) > 10 else ''}")
+        
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
 
         # Create DataFrame
         results = pd.DataFrame([index_metrics] + stock_metrics)
