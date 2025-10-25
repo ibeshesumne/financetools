@@ -32,27 +32,57 @@ if selected_file != 'Select a file...':
         try:
             # Check if data has MultiIndex columns
             if isinstance(data.columns, pd.MultiIndex):
-                # For MultiIndex, try to get the first symbol's Adj Close
-                if 'Adj Close' in data.columns.levels[0]:
-                    adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
-                else:
-                    # If no Adj Close, use Close price
-                    adj_close_col = data['Close'].iloc[:, 0] if len(data['Close'].columns) > 0 else data['Close']
+                # For MultiIndex, safely check for available columns
+                available_levels = data.columns.levels[0].tolist()
+                
+                # Try to get Adj Close first
+                if 'Adj Close' in available_levels:
+                    try:
+                        adj_close_col = data['Adj Close']
+                        # If it's still a MultiIndex, get the first column
+                        if isinstance(adj_close_col.columns, pd.MultiIndex):
+                            adj_close_col = adj_close_col.iloc[:, 0]
+                        return adj_close_col
+                    except (KeyError, IndexError):
+                        pass
+                
+                # If no Adj Close, try Close price
+                if 'Close' in available_levels:
+                    try:
+                        close_col = data['Close']
+                        # If it's still a MultiIndex, get the first column
+                        if isinstance(close_col.columns, pd.MultiIndex):
+                            close_col = close_col.iloc[:, 0]
+                        return close_col
+                    except (KeyError, IndexError):
+                        pass
+                
+                # If neither works, try to get any available price column
+                for level in available_levels:
+                    if 'close' in level.lower() or 'price' in level.lower():
+                        try:
+                            price_col = data[level]
+                            if isinstance(price_col.columns, pd.MultiIndex):
+                                price_col = price_col.iloc[:, 0]
+                            return price_col
+                        except (KeyError, IndexError):
+                            continue
+                
+                raise ValueError(f"No suitable price column found. Available levels: {available_levels}")
             else:
                 # For regular columns
                 if 'Adj Close' in data.columns:
-                    adj_close_col = data['Adj Close']
+                    return data['Adj Close']
                 elif 'Close' in data.columns:
-                    adj_close_col = data['Close']
+                    return data['Close']
                 else:
                     # If neither exists, try to find any price column
                     price_cols = [col for col in data.columns if 'close' in col.lower() or 'price' in col.lower()]
                     if price_cols:
-                        adj_close_col = data[price_cols[0]]
+                        return data[price_cols[0]]
                     else:
                         raise ValueError(f"No suitable price column found. Available columns: {list(data.columns)}")
             
-            return adj_close_col
         except Exception as e:
             st.error(f"Error extracting price data: {str(e)}")
             return None
@@ -70,6 +100,10 @@ if selected_file != 'Select a file...':
             if adj_close_col is None:
                 st.error(f"Cannot extract price data for {symbol}")
                 return None
+            
+            # Ensure adj_close_col is a Series
+            if isinstance(adj_close_col, pd.DataFrame):
+                adj_close_col = adj_close_col.iloc[:, 0]
             
             daily_returns = adj_close_col.pct_change().dropna()  # Calculate daily returns
             volatility = float(daily_returns.std()) * np.sqrt(252)  # Annualized volatility
@@ -102,62 +136,65 @@ if selected_file != 'Select a file...':
 
     # Fetch and process data
     index_metrics = fetch_and_calculate(index, start_date, end_date)
-    stock_metrics = [metric for metric in (fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date) for stock in stocks) if metric is not None]
+    
+    if index_metrics is not None:
+        stock_metrics = [metric for metric in (fetch_and_calculate(stock, index_metrics['First Trading Day'], end_date) for stock in stocks) if metric is not None]
 
-    # Create DataFrame
-    results = pd.DataFrame([index_metrics] + stock_metrics)
+        # Create DataFrame
+        results = pd.DataFrame([index_metrics] + stock_metrics)
 
-    # Ensure index is always at the top
-    results = pd.concat([results[results['Symbol'] == index], results[results['Symbol'] != index].sort_values(by='CAGR', ascending=False)])
+        # Ensure index is always at the top
+        results = pd.concat([results[results['Symbol'] == index], results[results['Symbol'] != index].sort_values(by='CAGR', ascending=False)])
 
-    # Display results
-    st.header("Results Summary:")
-    st.dataframe(results)
+        # Display results
+        st.header("Results Summary:")
+        st.dataframe(results)
 
-    # Plotting
-    if index_metrics is not None and not results.empty:
-        try:
-            # Extract the benchmark's CAGR and Annualized Volatility as scalar values
-            benchmark_cagr = float(index_metrics['CAGR'])
-            benchmark_stddev = float(index_metrics['Annualized Volatility'])
+        # Plotting
+        if not results.empty:
+            try:
+                # Extract the benchmark's CAGR and Annualized Volatility as scalar values
+                benchmark_cagr = float(index_metrics['CAGR'])
+                benchmark_stddev = float(index_metrics['Annualized Volatility'])
 
-            # Use Streamlit columns to control the layout
-            col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
+                # Use Streamlit columns to control the layout
+                col1, col2 = st.columns([3, 1])  # Creates two columns, using 3/4 of the width for the first and 1/4 for the second
 
-            with col1:  # This block will use 3/4 of the width
-                # Initialize the plot with specified dimensions
-                fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
+                with col1:  # This block will use 3/4 of the width
+                    # Initialize the plot with specified dimensions
+                    fig, ax = plt.subplots(figsize=(10, 6))  # You can adjust the figsize to better fit the column width if necessary
 
-                # Iterate over the DataFrame to plot each symbol
-                for i, row in results.iterrows():
-                    # Ensure we have scalar values for plotting
-                    volatility = float(row['Annualized Volatility'])
-                    cagr = float(row['CAGR'])
-                    symbol = str(row['Symbol'])
-                    
-                    ax.scatter(volatility, cagr, label=symbol)
-                    # Optionally, annotate the point with the symbol's name
-                    ax.text(volatility, cagr, symbol, color='black', ha='right', va='bottom')
+                    # Iterate over the DataFrame to plot each symbol
+                    for i, row in results.iterrows():
+                        # Ensure we have scalar values for plotting
+                        volatility = float(row['Annualized Volatility'])
+                        cagr = float(row['CAGR'])
+                        symbol = str(row['Symbol'])
+                        
+                        ax.scatter(volatility, cagr, label=symbol)
+                        # Optionally, annotate the point with the symbol's name
+                        ax.text(volatility, cagr, symbol, color='black', ha='right', va='bottom')
 
-                # Set plot title and labels
-                ax.set_title('Stock Returns vs. Standard Deviation')
-                ax.set_xlabel('Standard Deviation of Daily Returns (%)')
-                ax.set_ylabel('Compounded Annual Growth Rate (%)')
+                    # Set plot title and labels
+                    ax.set_title('Stock Returns vs. Standard Deviation')
+                    ax.set_xlabel('Standard Deviation of Daily Returns (%)')
+                    ax.set_ylabel('Compounded Annual Growth Rate (%)')
 
-                # Add legend to the plot
-                #ax.legend()
+                    # Add legend to the plot
+                    #ax.legend()
 
-                # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
-                ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
-                ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
+                    # Draw a vertical line for benchmark's standard deviation and a horizontal line for benchmark's CAGR
+                    ax.axvline(x=benchmark_stddev, color='lightgrey', linestyle='--')
+                    ax.axhline(y=benchmark_cagr, color='lightgrey', linestyle='--')
 
-                # Display the plot in the Streamlit app
-                st.pyplot(fig)
-        except Exception as e:
-            st.error(f"Error creating plot: {str(e)}")
+                    # Display the plot in the Streamlit app
+                    st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error creating plot: {str(e)}")
+        else:
+            st.warning("Unable to create plot due to missing data.")
     else:
-        st.warning("Unable to create plot due to missing data.")
-
+        st.error("Failed to fetch benchmark data. Please check the symbol and try again.")
 
 else:
-    st.write("Please upload a CSV file.")
+    st.write("Please select a CSV file.")
