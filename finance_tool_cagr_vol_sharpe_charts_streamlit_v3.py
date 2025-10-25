@@ -102,13 +102,13 @@ def fetch_and_calculate(symbol, start_date, end_date):
         # Ensure all calculations result in scalars
         volatility = float(daily_returns.std()) * np.sqrt(252)
         mean_daily_return = float(daily_returns.mean())
-        annualized_return = (1 + mean_daily_return) ** 252 - 1
-        sharpe_ratio = (annualized_return - risk_free_rate) / volatility
+        annualized_return = float((1 + mean_daily_return) ** 252 - 1)
+        sharpe_ratio = float((annualized_return - risk_free_rate) / volatility)
 
         # Calculate CAGR as scalar
-        cagr_value = ((float(adj_close_col.iloc[-1]) / float(adj_close_col.iloc[0])) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100
-        volatility_value = volatility * 100
-        sharpe_value = sharpe_ratio
+        cagr_value = float(((float(adj_close_col.iloc[-1]) / float(adj_close_col.iloc[0])) ** (365.25 / (data.index[-1] - data.index[0]).days) - 1) * 100)
+        volatility_value = float(volatility * 100)
+        sharpe_value = float(sharpe_ratio)
         
         metrics = {
             'Symbol': str(symbol),
@@ -130,9 +130,9 @@ def calculate_annual_returns(data):
         if adj_close_col is None:
             return pd.Series(dtype=float)
         
-        # Ensure we have a proper pandas Series
-        if not isinstance(adj_close_col, pd.Series):
-            adj_close_col = pd.Series(adj_close_col, index=data.index)
+        # Validate data
+        if len(adj_close_col) < 2:
+            return pd.Series(dtype=float)
         
         # Create a simple DataFrame with just the data we need
         # This avoids issues with MultiIndex DataFrames
@@ -146,15 +146,16 @@ def calculate_annual_returns(data):
         simple_df = simple_df.dropna(subset=['Price'])
         simple_df = simple_df[simple_df['Price'] > 0]
         
-        # Validate the DataFrame
-        if simple_df.empty or len(simple_df) < 2:
+        if len(simple_df) < 2:
             return pd.Series(dtype=float)
         
         # Group by year and get first and last prices
         yearly_prices = simple_df.groupby('Year')['Price'].agg(['first', 'last'])
         
-        # Check if we have valid data
-        if yearly_prices.empty:
+        # Filter out years with insufficient data
+        yearly_prices = yearly_prices.dropna()
+        
+        if len(yearly_prices) == 0:
             return pd.Series(dtype=float)
         
         yearly_returns = (yearly_prices['last'] / yearly_prices['first'] - 1) * 100
