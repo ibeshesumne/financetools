@@ -28,27 +28,57 @@ def get_adj_close_column(data):
     try:
         # Check if data has MultiIndex columns
         if isinstance(data.columns, pd.MultiIndex):
-            # For MultiIndex, try to get the first symbol's Adj Close
-            if 'Adj Close' in data.columns.levels[0]:
-                adj_close_col = data['Adj Close'].iloc[:, 0] if len(data['Adj Close'].columns) > 0 else data['Adj Close']
-            else:
-                # If no Adj Close, use Close price
-                adj_close_col = data['Close'].iloc[:, 0] if len(data['Close'].columns) > 0 else data['Close']
+            # For MultiIndex, safely check for available columns
+            available_levels = data.columns.levels[0].tolist()
+            
+            # Try to get Adj Close first
+            if 'Adj Close' in available_levels:
+                try:
+                    adj_close_col = data['Adj Close']
+                    # If it's still a MultiIndex, get the first column
+                    if isinstance(adj_close_col.columns, pd.MultiIndex):
+                        adj_close_col = adj_close_col.iloc[:, 0]
+                    return adj_close_col
+                except (KeyError, IndexError):
+                    pass
+            
+            # If no Adj Close, try Close price
+            if 'Close' in available_levels:
+                try:
+                    close_col = data['Close']
+                    # If it's still a MultiIndex, get the first column
+                    if isinstance(close_col.columns, pd.MultiIndex):
+                        close_col = close_col.iloc[:, 0]
+                    return close_col
+                except (KeyError, IndexError):
+                    pass
+            
+            # If neither works, try to get any available price column
+            for level in available_levels:
+                if 'close' in level.lower() or 'price' in level.lower():
+                    try:
+                        price_col = data[level]
+                        if isinstance(price_col.columns, pd.MultiIndex):
+                            price_col = price_col.iloc[:, 0]
+                        return price_col
+                    except (KeyError, IndexError):
+                        continue
+            
+            raise ValueError(f"No suitable price column found. Available levels: {available_levels}")
         else:
             # For regular columns
             if 'Adj Close' in data.columns:
-                adj_close_col = data['Adj Close']
+                return data['Adj Close']
             elif 'Close' in data.columns:
-                adj_close_col = data['Close']
+                return data['Close']
             else:
                 # If neither exists, try to find any price column
                 price_cols = [col for col in data.columns if 'close' in col.lower() or 'price' in col.lower()]
                 if price_cols:
-                    adj_close_col = data[price_cols[0]]
+                    return data[price_cols[0]]
                 else:
                     raise ValueError(f"No suitable price column found. Available columns: {list(data.columns)}")
         
-        return adj_close_col
     except Exception as e:
         st.error(f"Error extracting price data: {str(e)}")
         return None
